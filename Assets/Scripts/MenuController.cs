@@ -10,6 +10,12 @@ public class MenuController : MonoBehaviour
     public GameObject startPanel;
     public GameObject optionsPanel;
 
+    [Header("=== HOW TO PLAY ===")]
+    public GameObject howToPlayPanel;
+    public GameObject[] howToPlayPages;   // halaman 1, 2, ...
+    public GameObject htpPrevArrow;
+    public GameObject htpNextArrow;
+
     [Header("=== SLIDERS ===")]
     public Slider bgmSlider;
     public Slider sfxSlider;
@@ -22,6 +28,8 @@ public class MenuController : MonoBehaviour
     public string creditsSceneName = "";
 
     const string SaveSlotKey = "HasSaveSlot";
+
+    int htpPageIndex;
 
     void Start()
     {
@@ -78,6 +86,8 @@ public class MenuController : MonoBehaviour
     public void OnNewGameClick()
     {
         PlayerPrefs.SetInt(SaveSlotKey, 1);
+        PlayerPrefs.SetInt("LoadSave", 0);       // mulai dari intro
+        PlayerPrefs.SetInt("Chapter1_Stage", 0);
         PlayerPrefs.Save();
         if (!string.IsNullOrEmpty(gameSceneName))
             SceneManager.LoadScene(gameSceneName);
@@ -92,6 +102,8 @@ public class MenuController : MonoBehaviour
             Debug.Log("Belum ada save data — silakan New game.");
             return;
         }
+        PlayerPrefs.SetInt("LoadSave", 1);       // lanjut dari save
+        PlayerPrefs.Save();
         if (!string.IsNullOrEmpty(gameSceneName))
             SceneManager.LoadScene(gameSceneName);
     }
@@ -100,6 +112,14 @@ public class MenuController : MonoBehaviour
 
     public void OnBackClick()
     {
+        // Back dari How to Play -> kembali ke Options.
+        if (howToPlayPanel != null && howToPlayPanel.activeSelf)
+        {
+            howToPlayPanel.SetActive(false);
+            if (optionsPanel != null) optionsPanel.SetActive(true);
+            return;
+        }
+
         if (optionsPanel != null && optionsPanel.activeSelf)
         {
             PlayerPrefs.SetFloat("BGMVolume", bgmSlider.value);
@@ -109,9 +129,28 @@ public class MenuController : MonoBehaviour
         ShowMainMenu();
     }
 
+    // === BUTTON CALLBACKS — HOW TO PLAY ===
+
     public void OnHowToPlayClick()
     {
-        Debug.Log("How to Play — tambahkan logic di sini");
+        if (howToPlayPanel == null) return;
+        if (optionsPanel != null) optionsPanel.SetActive(false);
+        howToPlayPanel.SetActive(true);
+        ShowHtpPage(0);
+    }
+
+    public void OnHtpNextClick() => ShowHtpPage(htpPageIndex + 1);
+    public void OnHtpPrevClick() => ShowHtpPage(htpPageIndex - 1);
+
+    void ShowHtpPage(int index)
+    {
+        if (howToPlayPages == null || howToPlayPages.Length == 0) return;
+        htpPageIndex = Mathf.Clamp(index, 0, howToPlayPages.Length - 1);
+        for (int i = 0; i < howToPlayPages.Length; i++)
+            if (howToPlayPages[i] != null)
+                howToPlayPages[i].SetActive(i == htpPageIndex);
+        if (htpPrevArrow != null) htpPrevArrow.SetActive(htpPageIndex > 0);
+        if (htpNextArrow != null) htpNextArrow.SetActive(htpPageIndex < howToPlayPages.Length - 1);
     }
 
     // === SLIDER ===
@@ -155,5 +194,6 @@ public class MenuController : MonoBehaviour
         if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
         if (startPanel != null) startPanel.SetActive(false);
         if (optionsPanel != null) optionsPanel.SetActive(false);
+        if (howToPlayPanel != null) howToPlayPanel.SetActive(false);
     }
 }

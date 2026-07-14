@@ -161,6 +161,91 @@ public static class MainMenuBuilder
             "OK");
     }
 
+    /// Menambahkan panel How to Play ke scene MainMenu yang sudah ada (aditif,
+    /// tidak menghapus apa pun). Layout mengikuti "Contoh gambaran htp".
+    [MenuItem("Tools/Beneath the Silence/Build How To Play Panel")]
+    public static void BuildHowToPlay()
+    {
+        var scene = EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity", OpenSceneMode.Single);
+
+        const string HtpAssets = OptionsRoot + "How to play/";
+        EnsureSingleSprite(HtpAssets + "bg_htp.png");
+        EnsureSingleSprite(HtpAssets + "1_htp.png");
+        EnsureSingleSprite(HtpAssets + "2_htp.png");
+        EnsureSingleSprite(OptionsRoot + "Credits/Arrow left_credits.png");
+        EnsureSingleSprite(OptionsRoot + "Credits/Arrow right_credits.png");
+        EnsureSingleSprite(OptionsRoot + "Back.png");
+
+        var controller = Object.FindFirstObjectByType<MenuController>();
+        if (controller == null || controller.optionsPanel == null)
+        {
+            EditorUtility.DisplayDialog("How To Play",
+                "MenuController / OptionsPanel tidak ditemukan. Build Main Menu UI dulu.", "OK");
+            return;
+        }
+        // includeInactive: optionsPanel tersimpan dalam keadaan nonaktif.
+        var canvas = controller.optionsPanel.GetComponentInParent<Canvas>(true);
+
+        // Hapus panel lama bila menu item ini dijalankan ulang.
+        var old = canvas.transform.Find("HowToPlayPanel");
+        if (old != null) Object.DestroyImmediate(old.gameObject);
+
+        var panel = CreateImage("HowToPlayPanel", canvas.transform,
+            LoadSprite(HtpAssets + "bg_htp.png"));
+        panel.preserveAspect = false;
+        panel.raycastTarget = true;
+        StretchAll(panel.rectTransform);
+
+        // Halaman 1 & 2 (art 1920x1080, di-stretch sama seperti bg agar posisinya
+        // tetap menempel pada papan).
+        var page1 = CreateImage("Page1", panel.transform, LoadSprite(HtpAssets + "1_htp.png"));
+        page1.preserveAspect = false;
+        page1.raycastTarget = false;
+        StretchAll(page1.rectTransform);
+
+        var page2 = CreateImage("Page2", panel.transform, LoadSprite(HtpAssets + "2_htp.png"));
+        page2.preserveAspect = false;
+        page2.raycastTarget = false;
+        StretchAll(page2.rectTransform);
+
+        // Panah ganti halaman (pakai art panah dari folder Credits, gaya sama
+        // dengan contoh htp).
+        var arrowRightSprite = LoadAndCrop(OptionsRoot + "Credits/Arrow right_credits.png");
+        var btnNext = CreateButton("BtnHtpNext", panel.transform,
+            OptionsRoot + "Credits/Arrow right_credits.png",
+            new Vector2(0.5f, 0.5f), new Vector2(570, 0), FitSize(arrowRightSprite, 60));
+
+        var arrowLeftSprite = LoadAndCrop(OptionsRoot + "Credits/Arrow left_credits.png");
+        var btnPrev = CreateButton("BtnHtpPrev", panel.transform,
+            OptionsRoot + "Credits/Arrow left_credits.png",
+            new Vector2(0.5f, 0.5f), new Vector2(-570, 0), FitSize(arrowLeftSprite, 60));
+
+        // Tombol Back kanan-bawah papan.
+        var backSprite = LoadAndCrop(OptionsRoot + "Back.png");
+        var btnBack = CreateButton("BtnHtpBack", panel.transform,
+            OptionsRoot + "Back.png",
+            new Vector2(0.5f, 0f), new Vector2(440, 265), FitSize(backSprite, 200));
+
+        UnityEventTools.AddPersistentListener(btnNext.onClick, controller.OnHtpNextClick);
+        UnityEventTools.AddPersistentListener(btnPrev.onClick, controller.OnHtpPrevClick);
+        UnityEventTools.AddPersistentListener(btnBack.onClick, controller.OnBackClick);
+
+        controller.howToPlayPanel = panel.gameObject;
+        controller.howToPlayPages = new[] { page1.gameObject, page2.gameObject };
+        controller.htpPrevArrow = btnPrev.gameObject;
+        controller.htpNextArrow = btnNext.gameObject;
+        EditorUtility.SetDirty(controller);
+
+        // Kondisi awal: tertutup, halaman 1 aktif.
+        page2.gameObject.SetActive(false);
+        btnPrev.gameObject.SetActive(false);
+        panel.gameObject.SetActive(false);
+
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        Debug.Log("[MainMenuBuilder] How To Play panel dibangun & MainMenu.unity disimpan.");
+    }
+
     // ===== HELPERS =====
 
     static void CleanPreviousBuild()
@@ -202,6 +287,31 @@ public static class MainMenuBuilder
         var cropped = CropToContent(sprite) ?? sprite;
         _cropCache[path] = cropped;
         return cropped;
+    }
+
+    /// Pastikan texture ter-import sebagai Sprite (Single) supaya
+    /// AssetDatabase.LoadAssetAtPath<Sprite> tidak mengembalikan null.
+    static void EnsureSingleSprite(string assetPath)
+    {
+        var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+        if (importer == null)
+        {
+            Debug.LogWarning($"[MainMenuBuilder] Asset tidak ditemukan: {assetPath}");
+            return;
+        }
+        bool dirty = false;
+        if (importer.textureType != TextureImporterType.Sprite)
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            dirty = true;
+        }
+        if (importer.spriteImportMode != SpriteImportMode.Single)
+        {
+            importer.spriteImportMode = SpriteImportMode.Single;
+            dirty = true;
+        }
+        if (dirty)
+            importer.SaveAndReimport();
     }
 
     static void EnableTextureReadWrite(string assetPath)
