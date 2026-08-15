@@ -23,4 +23,11 @@ public class CameraFollow : MonoBehaviour
         p.x = Mathf.Clamp(x, minX, maxX);
         transform.position = p;
     }
+
+    public void UpdateY()
+    {
+        var p = transform.position;
+        p.y = target.position.y;
+        transform.position = p;
+    }
 }

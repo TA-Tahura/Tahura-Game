@@ -24,26 +24,37 @@ public class PlayerController2D : MonoBehaviour
 
     SpriteRenderer sr;
     float animTime;
+    private InputAction moveAction;
+    private InputAction runAction;
 
     void Awake()
     {
         sr = GetComponent<SpriteRenderer>();
     }
 
+    void Start()
+    {
+        moveAction = InputSystem.actions.FindAction("Move");
+        runAction = InputSystem.actions.FindAction("Sprint");
+    }
+
     void Update()
     {
+        
         float input = 0f;
         bool run = false;
 
-        var kb = Keyboard.current;
         bool paused = Time.timeScale < 0.01f;
         bool dialogOpen = DialogueManager.Instance != null && DialogueManager.Instance.IsActive;
 
-        if (canMove && !paused && !dialogOpen && kb != null)
+        if (canMove && !paused && !dialogOpen && moveAction != null && PlayerState.CanControl) 
         {
-            if (kb.leftArrowKey.isPressed || kb.aKey.isPressed) input -= 1f;
-            if (kb.rightArrowKey.isPressed || kb.dKey.isPressed) input += 1f;
-            run = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+            input = moveAction.ReadValue<Vector2>().x;
+
+            if (runAction != null)
+            {
+                run = runAction.IsPressed();
+            }
         }
 
         IsMoving = Mathf.Abs(input) > 0.01f;
