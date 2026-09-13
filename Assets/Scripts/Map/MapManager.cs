@@ -1,32 +1,53 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class MapManager : MonoBehaviour
 {
     public static MapManager Instance { get; private set; }
 
+    public enum AreaType { Overworld_Map, Japanese_Cave_Map, Third_Map } // Add new maps here
+
     [System.Serializable]
     public struct MapUIRecord
     {
-        public string roomID; // Matches the RoomZone's roomID string
+        public string roomID;
         public RectTransform mapStartTransform;
         public RectTransform mapEndTransform;
+    }
+
+    [System.Serializable]
+    private struct AreaPanelMapping
+    {
+        public AreaType areaType;
+        public GameObject panelGameObject;
     }
 
     [Header("UI References")]
     [SerializeField] private GameObject mapMenu;
     [SerializeField] private RectTransform playerPin;
 
-    [Header("Map UI Layout")]
+    [Header("Map Panels Registry")]
+    [SerializeField] private List<AreaPanelMapping> areaPanels;
+
+    [Header("Map UI Layout (For Room-Based Maps)")]
     [SerializeField] private List<MapUIRecord> mapUIRecords;
 
+    [Header("Fog / Overworld Controls")]
+    [SerializeField] private Image fogOverlayImage; 
+    [SerializeField] private Sprite[] fogSprites; 
+    private int currentFogLevel = 0;
+
+    private Dictionary<AreaType, GameObject> panelLookup = new Dictionary<AreaType, GameObject>();
     private Dictionary<string, MapUIRecord> uiLookup = new Dictionary<string, MapUIRecord>();
 
     private InputAction mapAction;
     private bool isOpen = false;
     private RoomZone currentRoom;
     private Transform playerTransform;
+
+    private AreaType currentActiveAreaType = AreaType.Japanese_Cave_Map;
 
     private void Awake()
     {
@@ -39,7 +60,16 @@ public class MapManager : MonoBehaviour
 
         mapAction = InputSystem.actions.FindAction("Map");
 
-        // Build the fast lookup dictionary for our UI records
+        // Build panel lookup
+        foreach (var mapping in areaPanels)
+        {
+            if (!panelLookup.ContainsKey(mapping.areaType))
+            {
+                panelLookup.Add(mapping.areaType, mapping.panelGameObject);
+            }
+        }
+
+        // Build room UI lookup
         foreach (var record in mapUIRecords)
         {
             if (!uiLookup.ContainsKey(record.roomID))
@@ -73,30 +103,32 @@ public class MapManager : MonoBehaviour
         if (isOpen) OpenMenu(); else CloseMenu();
     }
 
-    private void DebugMapUIRecords()
+    public void SetCurrentAreaType(AreaType newType)
     {
-        Debug.Log($"=== Map UI Records ({mapUIRecords.Count}) ===");
-
-        for (int i = 0; i < mapUIRecords.Count; i++)
-        {
-            MapUIRecord record = mapUIRecords[i];
-
-            Debug.Log(
-                $"[{i}] RoomID: {record.roomID}, " +
-                $"Start: {(record.mapStartTransform != null ? record.mapStartTransform.name : "NULL")}, " +
-                $"End: {(record.mapEndTransform != null ? record.mapEndTransform.name : "NULL")}"
-            );
-        }
-
-        Debug.Log("=== End Map UI Records ===");
+        currentActiveAreaType = newType;
     }
 
     public void OpenMenu()
     {
         PlayerState.IsAnyUIOpen = true;
         mapMenu.SetActive(true);
+
+        // Activate the target panel and deactivate all others
+        foreach (var kvp in panelLookup)
+        {
+            if (kvp.Value != null)
+            {
+                kvp.Value.SetActive(kvp.Key == currentActiveAreaType);
+            }
+        }
+
+        // Execute area-specific initialization
+        if (currentActiveAreaType == AreaType.Overworld_Map)
+        {
+            UpdateFogState();
+        }
+
         UpdatePlayerPinPosition();
-        DebugMapUIRecords();
     }
 
     public void CloseMenu()
@@ -118,11 +150,39 @@ public class MapManager : MonoBehaviour
         currentRoom = newRoom;
     }
 
+    public void AdvanceFogState()
+    {
+        currentFogLevel++;
+        currentFogLevel = Mathf.Clamp(currentFogLevel, 0, fogSprites.Length);
+    }
+
+    public void SetFogLevel(int level)
+    {
+        currentFogLevel = Mathf.Clamp(level, 0, fogSprites.Length);
+    }
+
+    private void UpdateFogState()
+    {
+        if (fogOverlayImage == null) return;
+
+        if (currentFogLevel >= 2 || currentFogLevel >= fogSprites.Length)
+        {
+            fogOverlayImage.gameObject.SetActive(false);
+        }
+        else
+        {
+            fogOverlayImage.gameObject.SetActive(true);
+            if (currentFogLevel < fogSprites.Length && fogSprites[currentFogLevel] != null)
+            {
+                fogOverlayImage.sprite = fogSprites[currentFogLevel];
+            }
+        }
+    }
+
     private void UpdatePlayerPinPosition()
     {
         if (playerTransform == null || playerPin == null) return;
 
-        // If there's no current room or the Room ID isn't in our UI lookup, hide the pin if it's currently active
         if (currentRoom == null || !uiLookup.TryGetValue(currentRoom.RoomID, out MapUIRecord uiRecord))
         {
             if (playerPin.gameObject.activeSelf)
@@ -134,7 +194,6 @@ public class MapManager : MonoBehaviour
 
         if (uiRecord.mapStartTransform == null || uiRecord.mapEndTransform == null) return;
 
-        // Make sure the pin is active only if it isn't already
         if (!playerPin.gameObject.activeSelf)
         {
             playerPin.gameObject.SetActive(true);
